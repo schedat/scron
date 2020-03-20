@@ -16,17 +16,17 @@ type job struct {
 	Enabled   bool   `mapstructure:"enabled"`
 }
 
-// config contains configuration for Scheduler
-type config struct {
+// Config contains configuration for Scheduler
+type Config struct {
 	Host string `mapstructure:"host"`
 	Jobs []job  `mapstructure:"jobs"`
 }
 
 // Parse parses config
-func Parse(reader io.Reader) (*config, error) {
+func Parse(reader io.Reader) (*Config, error) {
 	viper.SetConfigType("yaml")
 
-	var cfg config
+	var cfg Config
 
 	err := viper.ReadConfig(reader)
 	if err != nil {

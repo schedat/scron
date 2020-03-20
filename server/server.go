@@ -3,7 +3,6 @@ package server
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -17,7 +16,9 @@ type (
 
 	// SchedulerServer schedules and executes jobs
 	SchedulerServer struct {
-		Config SchedulerConfig
+		Config    SchedulerConfig
+		jobs      []job
+		schedules []Schedule
 	}
 
 	// Job provides public information about a job
@@ -26,31 +27,64 @@ type (
 		Name    string
 		Enabled bool
 	}
+
+	// Schedule associates trigger to a job
+	Schedule struct {
+		Job         string
+		Description string
+		Trigger     string // Cron expression
+	}
 )
 
-func (p *SchedulerServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var path = p.Config.ConfigPath + "/config.yml"
+// NewScheduler creates and initializes new instance of SchedulerServer
+func NewScheduler(config SchedulerConfig) (*SchedulerServer, error) {
+	var path = config.ConfigPath + "/config.yml"
 
 	file, err := os.Open(path)
 	defer file.Close()
 
 	if err != nil {
 		log.Fatal(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Unable to read config file")
-		return
+		return nil, err
 	}
 
-	config, err := Parse(bufio.NewReader(file))
+	cfg, err := Parse(bufio.NewReader(file))
 	if err != nil {
 		log.Fatal(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Unable to parse config")
-		return
+		return nil, err
 	}
 
+	server := SchedulerServer{Config: config, jobs: cfg.Jobs}
+	return &server, nil
+}
+
+func (p *SchedulerServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	router := http.NewServeMux()
+
+	router.HandleFunc("/jobs", http.HandlerFunc(p.handleJobs))
+	router.HandleFunc("/schedules", http.HandlerFunc(p.handleSchedules))
+
+	router.ServeHTTP(w, r)
+}
+
+func (p *SchedulerServer) handleSchedules(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(p.schedules)
+	} else if r.Method == http.MethodPost {
+		var payload Schedule
+		json.NewDecoder(r.Body).Decode(&payload)
+		p.schedules = append(p.schedules, payload)
+
+		w.WriteHeader(http.StatusAccepted)
+	} else {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (p *SchedulerServer) handleJobs(w http.ResponseWriter, r *http.Request) {
 	var payload []Job
-	for _, job := range config.Jobs {
+	for _, job := range p.jobs {
 		payload = append(payload, Job{
 			ID:      job.ID,
 			Name:    job.Name,
