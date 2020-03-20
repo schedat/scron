@@ -27,10 +27,15 @@ to find jobs to run. It also monitors and reports statuses of these jobs.`,
 			log.Fatalf("could not get current directory: %v", err)
 		}
 
-		server := &server.SchedulerServer{
-			Config: server.SchedulerConfig{
+		server, err := server.NewScheduler(
+			server.SchedulerConfig{
 				ConfigPath: wd + "/config",
 			},
+		)
+
+		if err != nil {
+			log.Fatalf("Cannot create Scheduler %v", err)
+			return
 		}
 
 		if err := http.ListenAndServe(":5000", server); err != nil {
