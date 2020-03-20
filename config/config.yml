@@ -1,0 +1,12 @@
+host: app-server-1
+jobs:
+- id: backup-database
+  name: Backup User Database
+  program: /usr/bin/backup-database
+  arguments: 
+  enabled: false
+- id: renew-letsencrypt
+  name: Renew LetsEncrypt certificates
+  program: /bin/certbot
+  arguments: renew
+  enabled: true
