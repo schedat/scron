@@ -25,12 +25,11 @@ to find jobs to run. It also monitors and reports statuses of these jobs.`,
 		wd, err := os.Getwd()
 		if err != nil {
 			log.Fatalf("could not get current directory: %v", err)
+			return
 		}
 
 		server, err := server.NewScheduler(
-			server.SchedulerConfig{
-				ConfigPath: wd + "/config",
-			},
+			server.SchedulerConfig{ConfigPath: wd + "/config"},
 		)
 
 		if err != nil {

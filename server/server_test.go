@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -52,7 +53,7 @@ func TestSchedules(t *testing.T) {
 		assert.Equal(t, response.Code, http.StatusAccepted)
 	})
 
-	t.Run("Get all schedules", func(t *testing.T) {
+	t.Run("Get scheduled jobs", func(t *testing.T) {
 		server := newFakeScheduler(t)
 		addScheduleTo(server)
 
@@ -62,17 +63,23 @@ func TestSchedules(t *testing.T) {
 
 		server.ServeHTTP(response, request)
 
-		got := make([]Schedule, 0)
+		got := make([]ScheduledJob, 0)
 		json.NewDecoder(response.Body).Decode(&got)
 
-		want := []Schedule{Schedule{
-			Job:         "backup-database",
-			Description: "Backup every minute",
-			Trigger:     "*/1 * * * *",
-		}}
+		sched := got[0]
 
-		assert.Equal(t, got, want)
+		assert.Equal(t, sched.ID, 1)
+		assert.Equal(t, sched.Job, "backup-database")
+		assert.Equal(t, sched.Description, "Backup User Database")
+		assert.Equal(t, sched.Trigger, "*/1 * * * *")
+		assertNextExecutionInFuture(t, sched.NextExecution)
 	})
+}
+
+func assertNextExecutionInFuture(t *testing.T, tm time.Time) {
+	if tm.Before(time.Now()) {
+		t.Errorf("Next execution should be in future, got %v", tm)
+	}
 }
 
 func newFakeScheduler(t *testing.T) *SchedulerServer {
@@ -99,7 +106,7 @@ func addScheduleTo(server *SchedulerServer) {
 	var jsonStr = []byte(`
 		{
 			"job":"backup-database",
-			"description": "Backup every minute",
+			"description": "Backup User Database",
 			"trigger": "*/1 * * * *"
 		}
 		`)
