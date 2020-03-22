@@ -3,11 +3,13 @@ package server
 import (
 	"bufio"
 	"encoding/json"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"time"
+
+	"github.com/google/uuid"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/robfig/cron/v3"
 )
@@ -78,7 +80,7 @@ func NewScheduler(config SchedulerConfig) (*SchedulerServer, error) {
 		return nil, err
 	}
 
-	crn := cron.New()
+	crn := cron.New(cron.WithLogger(cron.VerbosePrintfLogger(log.New())))
 
 	server := SchedulerServer{
 		Config: config,
@@ -119,17 +121,8 @@ func (p *SchedulerServer) handleSchedules(w http.ResponseWriter, r *http.Request
 		json.NewDecoder(r.Body).Decode(&payload)
 
 		if job := p.findJobByID(payload.Job); job != nil {
-			id, err := p.cron.AddFunc(payload.Trigger, func() {
-				cmd := exec.Command(job.Program, job.Arguments)
-				out, err := cmd.Output()
+			id, err := p.cron.AddJob(payload.Trigger, job)
 
-				if err != nil {
-					println(err.Error())
-					return
-				}
-
-				print(string(out))
-			})
 			if err == nil {
 				sched := schedule{
 					id:          id,
@@ -175,4 +168,25 @@ func (p *SchedulerServer) findJobByID(job string) *job {
 	}
 
 	return nil
+}
+
+func (j job) Run() {
+	executionID := uuid.New()
+	logger := log.New().WithFields(log.Fields{
+		"job":         j.ID,
+		"executionId": executionID.String(),
+	})
+	logger.Info("Started")
+
+	cmd := exec.Command(j.Program, j.Arguments)
+	out, err := cmd.CombinedOutput()
+
+	if err != nil {
+		logger.Errorf("Unable to run (%v) :  %v", j.ID, err)
+		return
+	}
+
+	logger.WithField("source", "command").Info(string(out))
+
+	logger.Info("Ended")
 }
